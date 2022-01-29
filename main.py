@@ -2,6 +2,7 @@ import cv2
 import math
 import os
 import curses
+import sys
 
 import time
 import argparse
@@ -31,15 +32,16 @@ except OSError as e:
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--width", type=int, required=False,
-                    default=term_size.columns - 1, help="the width of the output window")
+                    default=term_size.columns, help="the width of the output window")
 parser.add_argument("--height", type=int, required=False,
-                    default=term_size.lines - 1, help="the height of the output window")
+                    default=term_size.lines, help="the height of the output window")
 parser.add_argument("--usecolor", type=str2bool, required=False, default=False,
                     help="if enabled, color is added based on grayscale values (default False)")
 parser.add_argument("--showfps", type=str2bool, required=False,
                     default=True, help="if enabled, shows FPS on top left (default: True)")
 args = parser.parse_args()
 
+"""
 if args.width > term_size.columns - 1:  # manual width must be <= width of terminal
     print(
         f"Height Must Be Less Than Or Equal To {term_size.columns - 1} (terminal width)")
@@ -49,11 +51,12 @@ if args.height > term_size.lines - 1:  # manual height must be <= height of term
         f"Height Must Be Less Than Or Equal To {term_size.lines - 1} (terminal height)")
     quit(1)
 
+"""
 # used to map grayscale to chars
 ramp = "$@B%8&WM#*oahkbdpqwmZO0QLCJUYXzcvunxrjft/|()1{}[]?-_+~<>i!lI;:,\"^`'. "
 ramp_size = len(ramp)
 
-vid = cv2.VideoCapture(0, cv2.CAP_DSHOW)  # camera input
+vid = cv2.VideoCapture(0)  # camera input
 
 screen = curses.initscr()
 curses.curs_set(0)
@@ -80,30 +83,41 @@ def pix_to_ascii(pix) -> str:
     """
     Converts a grayscale pixel to a character for the ramp
     """
-    return ramp[math.ceil(((ramp_size - 1) * pix) / 255)]
+    #ch = ramp[math.ceil(((ramp_size - 1) * pix) / 255)]
+    ch = 'a'
+    return "\033[38;2;{};{};{}m{}".format(*pix, ch)
+    #return "\033[38;2;255;82;197m" + ch
 
 
 def display_mat(mat) -> None:
+
+    #screen.addstr(0, 0, "*"*500)
+    buffer = []
     for i in range(len(mat)):
         for j in range(len(mat[0])):
-            screen.addstr(i, j,
-                          pix_to_ascii(mat[i][j]),
-                          curses.color_pair(
-                              heatmap(mat[i][j])) if args.usecolor else 0
-                          )
+            buffer.append(pix_to_ascii(mat[i][j]))
+            #screen.addstr(i, j,
+            #              pix_to_ascii(mat[i][j])
+            #              )
+    #screen.addstr(0, 0, "".join(buffer))
+    print("\033[2J" + "\033[100000A\033[100000D" + "".join(buffer))
+                          
 
 
 last = time.time()
 current = time.time()
+import time
 while True:
     ret, frame = vid.read()
+
     if not ret:
         print("ERR: Failed To Get Frame From Camera (Make sure a camera is available)")
         break
 
     mat = cv2.flip(  # take the camera input, make it grayscale, scale it down, and mirror it
         cv2.resize(
-            cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (args.width, args.height)
+            #cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (args.width, args.height)
+            frame, (args.width, args.height)
         ), 1)
 
     screen.nodelay(1)
@@ -113,7 +127,7 @@ while True:
     else:
         curses.flushinp()
 
-    screen.clear()
+    #screen.clear()
     # display the current frame using the ramp + heatmap (if enabled)
     display_mat(mat)
 
@@ -125,8 +139,10 @@ while True:
     except ZeroDivisionError:
         fps = "inf"  # some frames may take < 1 ms causing div by 0 error
     if args.showfps:
-        screen.addstr(0, 0, fps)
-    screen.refresh()
+        print("\033[100000A\033[100000D" + "".join(fps))
+        pass
+        #screen.addstr(0, 0, fps)
+    #screen.refresh()
 
 
 vid.release()
